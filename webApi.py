@@ -1,6 +1,8 @@
 # ejecutar para levantar servicio: uvicorn webApi:app --reload
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Path
 import requests
+
+from show import Show
 
 app = FastAPI()
 servicio_url = 'https://api.tvmaze.com/'
@@ -30,4 +32,21 @@ def search_shows(search_query: str = Query(..., description="A-Endpoint search")
 
     except requests.exceptions.RequestException as e:
         
+        return {'error': f'Error de solicitud: {str(e)}'}
+
+
+@app.get('/search_show_by_id/{id}')
+def search_shows_by_id(id: int = Path(..., description="B-Endpoint show")):
+
+    path = f'shows/{id}'
+    try:
+        response = requests.get(servicio_url + path)
+        if response.status_code == 200:
+            data = response.json()
+            show_instance = Show(data)
+            return show_instance
+        else:
+            return {'error': 'No se pudo consumir el servicio'}, response.status_code
+
+    except requests.exceptions.RequestException as e:
         return {'error': f'Error de solicitud: {str(e)}'}
