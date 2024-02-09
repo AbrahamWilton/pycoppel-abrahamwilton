@@ -4,6 +4,7 @@ import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from show import Show
+from commentReviewPostRequest import CommentReviewPostRequest
 
 app = FastAPI()
 
@@ -52,7 +53,7 @@ def get_data_from_cache_or_db(item_id: int, use_cache: bool):
             return data_from_db
 
 @app.get('/search_show_by_id/{id}')
-def search_shows_by_id(id: int = Path(..., description="B-Endpoint show"), use_cache: bool = True):
+def search_show_by_id(id: int = Path(..., description="B-Endpoint show"), use_cache: bool = True):
 
     path = f'shows/{id}'
     show_data = get_data_from_cache_or_db(id, use_cache)
@@ -79,3 +80,22 @@ def search_shows_by_id(id: int = Path(..., description="B-Endpoint show"), use_c
     else:
         print("datos encontrados en cache")            
         return show_data
+    
+@app.post('/show_review')
+def show_review(review_data: CommentReviewPostRequest):
+    try:
+        # Aqui faltaria validar si el show ya existe en la bd para no crear inconsistencias
+        show_id = review_data.show_id
+        comment = review_data.comment
+        rating = review_data.rating
+
+        # Validar entrada y guarda
+        if not 0 <= rating <= 5:
+            raise HTTPException(status_code=400, detail="El rating debe estar en el rango de 0 a 5")
+        review_instance = {"show_id": show_id, "comment": comment, "rating": rating}
+        collection.insert_one(review_instance)
+
+        return {"message": "Revisión recibida y almacenada en MongoDB", "review_data": review_data}
+
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Falta el campo obligatorio: {str(e)}")
