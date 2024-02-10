@@ -4,6 +4,7 @@ import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from show import Show
+from comment import Comment
 from commentReviewPostRequest import CommentReviewPostRequest
 
 app = FastAPI()
@@ -13,7 +14,8 @@ app = FastAPI()
 uri = "mongodb+srv://abrahamwilton:YZ8e9xNuwQbCw7Q9@cluster0.0e4duv5.mongodb.net/?retryWrites=true&w=majority"
 mongo_client = MongoClient(uri, server_api=ServerApi('1'))
 db = mongo_client["shows_db"]
-collection = db["shows_colletion"]
+shows_collection  = db["shows_colletion"]
+reviews_colletion  = db["reviews_colletion"]
 
 servicio_url = 'https://api.tvmaze.com/'
 
@@ -27,12 +29,22 @@ def search_shows(search_query: str = Query(..., description="A-Endpoint search")
         if response.status_code == 200:
             
             data = response.json()
+            show_id = data[0]["show"]["id"]
+
+            comments_data = db["reviews_colletion"].find({"show_id": show_id})
+            
+            comments = [
+                {k: v for k, v in comment.items() if k != '_id'}
+                for comment in comments_data
+            ]
+
             transformed_data = {
-                "id": data[0]["show"]["id"],
+                "id": show_id,
                 "name": data[0]["show"]["name"],
                 "channel": data[0]["show"]["network"]["name"] if data[0]["show"]["network"] else data[0]["show"]["webChannel"],
                 "summary": data[0]["show"]["summary"],
-                "genres": data[0]["show"]["genres"]
+                "genres": data[0]["show"]["genres"],
+                "comments": comments
             }
 
             return transformed_data
@@ -47,7 +59,7 @@ def search_shows(search_query: str = Query(..., description="A-Endpoint search")
 def get_data_from_cache_or_db(item_id: int, use_cache: bool):
     if use_cache:
         # Intenta obtener los datos directamente desde MongoDB
-        data_from_db = collection.find_one({"_id": item_id})
+        data_from_db = shows_collection.find_one({"_id": item_id})
         if data_from_db:
             #print(data_from_db)
             return data_from_db
@@ -65,7 +77,7 @@ def search_show_by_id(id: int = Path(..., description="B-Endpoint show"), use_ca
             data = response.json()
 
             print("guardando en cache mongo")
-            collection.update_one({"_id": id}, {"$set": data}, upsert=True)
+            shows_collection.update_one({"_id": id}, {"$set": data}, upsert=True)
 
             show_instance = Show(data)
             return show_instance
@@ -93,7 +105,7 @@ def show_review(review_data: CommentReviewPostRequest):
         if not 0 <= rating <= 5:
             raise HTTPException(status_code=400, detail="El rating debe estar en el rango de 0 a 5")
         review_instance = {"show_id": show_id, "comment": comment, "rating": rating}
-        collection.insert_one(review_instance)
+        reviews_colletion.insert_one(review_instance)
 
         return {"message": "Revisión recibida y almacenada en MongoDB", "review_data": review_data}
 
